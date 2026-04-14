@@ -1,0 +1,241 @@
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+svg text { font-family: var(--font-sans); }
+.node-group { cursor: pointer; }
+.node-group rect, .node-group circle { transition: opacity 0.15s; }
+.node-group:hover rect, .node-group:hover circle { opacity: 0.82; }
+.legend-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--color-text-secondary); }
+.legend-line { height: 2px; width: 24px; border-radius: 1px; }
+.pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; padding: 3px 9px; border-radius: 99px; font-weight: 500; cursor: pointer; border: none; background: var(--color-background-secondary); color: var(--color-text-secondary); border: 0.5px solid var(--color-border-secondary); }
+.pill.active-pos  { background: var(--color-background-danger);  color: var(--color-text-danger); border-color: transparent; }
+.pill.active-spd  { background: var(--color-background-warning); color: var(--color-text-warning); border-color: transparent; }
+.pill.active-nav  { background: var(--color-background-info);    color: var(--color-text-info); border-color: transparent; }
+.pill.active-time { background: var(--color-background-success);  color: var(--color-text-success); border-color: transparent; }
+.info-box { border: 0.5px solid var(--color-border-tertiary); border-radius: 8px; padding: 10px 14px; background: var(--color-background-secondary); font-size: 13px; color: var(--color-text-secondary); min-height: 52px; line-height: 1.6; }
+.info-box strong { color: var(--color-text-primary); font-weight: 500; }
+</style>
+
+<div style="padding: 4px 0 12px; display: flex; gap: 6px; flex-wrap: wrap;">
+  <button class="pill active-pos" onclick="filter('pos',this)">pozycja</button>
+  <button class="pill active-spd" onclick="filter('spd',this)">prędkość</button>
+  <button class="pill active-nav" onclick="filter('nav',this)">kurs / status</button>
+  <button class="pill active-time" onclick="filter('time',this)">czas</button>
+  <button class="pill" id="pill-all" onclick="filterAll(this)" style="margin-left:4px">pokaż wszystko</button>
+</div>
+
+<svg width="100%" viewBox="0 0 680 580" role="img">
+<title>Mapa zależności pól AIS i wykrywanych anomalii</title>
+<desc>Diagram pokazujący które pola AIS (MMSI, LAT/LON, SOG, COG, Heading, Draught, Timestamp) łączą się z jakimi anomaliami.</desc>
+<defs>
+  <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+</defs>
+
+<!-- ── FIELD NODES (left column) ── -->
+<!-- MMSI -->
+<g class="node-group" id="f-mmsi" onclick="showInfo('MMSI','Unikalny 9-cyfrowy identyfikator stacji morskiej. Pierwsze 3 cyfry to MID (kraj). Anomalie: nieprawidłowa długość, zerowa wartość, zarezerwowane prefiksy (111, 970).')">
+  <rect x="40" y="44" width="110" height="36" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="95" y="62" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#3C3489">MMSI</text>
+</g>
+<!-- LAT / LON -->
+<g class="node-group" id="f-pos" onclick="showInfo('LAT / LON','Pozycja geograficzna. Zakres: LAT −90..90, LON −180..180. Wartości domyślne: LAT=91.0, LON=181.0. Null Island: (0,0). Anomalie wymagają odniesienia do poprzedniego puntu lub maski ląd/morze.')">
+  <rect x="40" y="104" width="110" height="36" rx="8" fill="#FAECE7" stroke="#993C1D" stroke-width="0.5"/>
+  <text x="95" y="122" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#712B13">LAT / LON</text>
+</g>
+<!-- SOG -->
+<g class="node-group" id="f-sog" onclick="showInfo('SOG','Speed Over Ground — prędkość nad dnem w węzłach. Zakres: 0–102.2 kn. Wartość domyślna: 102.3. Zależy od klasy mobilnej (Class A max ~30 kn, Class B ~20 kn) i zanurzenia.')">
+  <rect x="40" y="164" width="110" height="36" rx="8" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/>
+  <text x="95" y="182" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#633806">SOG</text>
+</g>
+<!-- COG -->
+<g class="node-group" id="f-cog" onclick="showInfo('COG','Course Over Ground — kurs nad dnem 0–359.9°. Wartość domyślna: 360.0. Porównywany z rzeczywistym kierunkiem przemieszczenia (bearing z haversine). Przy SOG &lt; 1 kn różnica COG–bearing jest normalna (dryf).')">
+  <rect x="40" y="224" width="110" height="36" rx="8" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/>
+  <text x="95" y="242" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#633806">COG</text>
+</g>
+<!-- Heading -->
+<g class="node-group" id="f-hdg" onclick="showInfo('Heading','Rzeczywisty kurs dziobowy 0–359°. Wartość domyślna: 511. Normalnie zbliżony do COG ±20°. Duże odchylenia (>45°) przy SOG>3 kn są podejrzane. Odwrócenie o ~180° sugeruje błąd konfiguracji.')">
+  <rect x="40" y="284" width="110" height="36" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="95" y="302" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#085041">Heading</text>
+</g>
+<!-- Draught -->
+<g class="node-group" id="f-drg" onclick="showInfo('Draught','Zanurzenie w metrach — deklaratywne, wpisywane ręcznie. Zakres fizyczny: 0.5–22 m. Wyznacza LWL (długość na linii wodnej) → hull speed → maksymalną prędkość. Często zerowe lub nieaktualne.')">
+  <rect x="40" y="344" width="110" height="36" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="95" y="362" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#085041">Draught</text>
+</g>
+<!-- Ship type -->
+<g class="node-group" id="f-stype" onclick="showInfo('Ship type','Kod IMO 0–99 określający typ statku. Wpływa na współczynnik blokowy CB (tanker CB=0.82, kontenerowiec CB=0.65) i maksymalne oczekiwane zanurzenie oraz prędkość.')">
+  <rect x="40" y="404" width="110" height="36" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="95" y="422" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#085041">Ship type</text>
+</g>
+<!-- Timestamp -->
+<g class="node-group" id="f-ts" onclick="showInfo('Timestamp','Czas odbioru sygnału UTC. Wymagany do obliczenia dt między pingami (podstawa v_geo i v_path). Anomalie: duplikaty (ten sam MMSI+TS), odwrócona kolejność, timestamp w przyszłości lub epoch (1970).')">
+  <rect x="40" y="464" width="110" height="36" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="95" y="482" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#3C3489">Timestamp</text>
+</g>
+<!-- Nav status -->
+<g class="node-group" id="f-nav" onclick="showInfo('Nav status','Status nawigacyjny 0–15. Kluczowe wartości: 0=silnik, 1=kotwica, 5=zacumowany. Kombinacja z SOG tworzy anomalie logiczne: zacumowany+SOG>0.3kn, zakotwiczony+SOG>1kn.')">
+  <rect x="40" y="524" width="110" height="36" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="95" y="542" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="500" fill="#0C447C">Nav status</text>
+</g>
+
+<!-- ── ANOMALY NODES (right column) ── -->
+<!-- FLAG_POSITION_INVALID -->
+<g class="node-group" id="a-pos1" onclick="showInfo('FLAG_POSITION_INVALID','LAT poza −90..90, LON poza −180..180, wartości domyślne (91/181), Null Island (0,0). Krytyczna flaga — rekord powinien być odrzucony zanim trafi do dalszej analizy.')">
+  <rect x="460" y="44" width="190" height="36" rx="8" fill="#FCEBEB" stroke="#A32D2D" stroke-width="0.5"/>
+  <text x="555" y="62" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#791F1F">FLAG_POSITION_INVALID</text>
+</g>
+<!-- FLAG_ON_LAND -->
+<g class="node-group" id="a-pos2" onclick="showInfo('FLAG_ON_LAND','Pozycja geograficznie na lądzie — wymaga zewnętrznej maski (GSHHG lub Natural Earth). Ostrożnie z portami i zatokami przy niskiej rozdzielczości maski.')">
+  <rect x="460" y="96" width="190" height="36" rx="8" fill="#FCEBEB" stroke="#A32D2D" stroke-width="0.5"/>
+  <text x="555" y="114" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#791F1F">FLAG_ON_LAND</text>
+</g>
+<!-- FLAG_SPEED_JUMP -->
+<g class="node-group" id="a-spd1" onclick="showInfo('FLAG_SPEED_JUMP','v_geo = haversine(p1,p2)/dt przekracza próg klasowy. Class A: 30 kn, Class B: 20 kn. Oblicza się per para kolejnych rekordów tego samego MMSI po posortowaniu po czasie.')">
+  <rect x="460" y="156" width="190" height="36" rx="8" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/>
+  <text x="555" y="174" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#633806">FLAG_SPEED_JUMP</text>
+</g>
+<!-- FLAG_SOG_CLASS -->
+<g class="node-group" id="a-spd2" onclick="showInfo('FLAG_SOG_CLASS','SOG zadeklarowany przekracza próg dla danej klasy mobilnej. Prostsze niż speed jump — nie wymaga poprzedniego rekordu, działa na każdym wierszu z osobna.')">
+  <rect x="460" y="208" width="190" height="36" rx="8" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/>
+  <text x="555" y="226" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#633806">FLAG_SOG_CLASS</text>
+</g>
+<!-- FLAG_EXCEEDS_HULL -->
+<g class="node-group" id="a-spd3" onclick="showInfo('FLAG_EXCEEDS_HULL','Prędkość konsensusu przekracza hull_max = 1.34×√LWL_ft × 1.35. LWL szacowane z zanurzenia. Im większe zanurzenie, tym niższy limit — tankowiec VLCC (22m) max ~18 kn.')">
+  <rect x="460" y="260" width="190" height="36" rx="8" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/>
+  <text x="555" y="278" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#633806">FLAG_EXCEEDS_HULL</text>
+</g>
+<!-- FLAG_COG_INCONSISTENT -->
+<g class="node-group" id="a-nav1" onclick="showInfo('FLAG_COG_INCONSISTENT','|bearing(p1→p2) − COG| > 30° przy SOG > 1 kn. bearing obliczany z atan2(dLON, dLAT). Przy SOG < 1 kn różnica jest normalna (dryf, prąd). Wyższy próg alarmowy: > 90° = FLAG_COG_CRITICAL.')">
+  <rect x="460" y="320" width="190" height="36" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="555" y="338" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#0C447C">FLAG_COG_INCONSIST.</text>
+</g>
+<!-- FLAG_HDG_COG_DIFF -->
+<g class="node-group" id="a-nav2" onclick="showInfo('FLAG_HDG_COG_DIFF','|Heading − COG| > 45° przy SOG > 3 kn i Heading ≠ 511. Odchylenie do ~20° normalne (wiatr, prąd). ~180° odchylenie = FLAG_HDG_REVERSED = błąd konfiguracji transpondera.')">
+  <rect x="460" y="372" width="190" height="36" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="555" y="390" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#0C447C">FLAG_HDG_COG_DIFF</text>
+</g>
+<!-- FLAG_STATUS_SOG -->
+<g class="node-group" id="a-nav3" onclick="showInfo('FLAG_STATUS_SOG','Niezgodność statusu nawigacyjnego z SOG. Zakotwiczony (1) + SOG > 1 kn, Zacumowany (5) + SOG > 0.3 kn. Może też wykrywać statek z silnikiem (0) stojący zbyt długo bez zmiany statusu.')">
+  <rect x="460" y="424" width="190" height="36" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="555" y="442" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#0C447C">FLAG_STATUS_SOG</text>
+</g>
+<!-- FLAG_DUPLICATE -->
+<g class="node-group" id="a-time1" onclick="showInfo('FLAG_DUPLICATE','Ten sam MMSI + ten sam Timestamp lub |dt| < 2 sek z tą samą pozycją. Dokładny duplikat: usuń jeden. Przybliżony duplikat: zachowaj rekord z lepszą jakością pozostałych pól.')">
+  <rect x="460" y="484" width="190" height="36" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.5"/>
+  <text x="555" y="502" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#27500A">FLAG_DUPLICATE</text>
+</g>
+<!-- FLAG_TIMESTAMP_ORDER -->
+<g class="node-group" id="a-time2" onclick="showInfo('FLAG_TIMESTAMP_ORDER','Timestamp[n] < Timestamp[n−1] dla tego samego MMSI. Może wynikać z różnych stacji odbiorczych raportujących z opóźnieniem. Naprawia się przez sort_values([MMSI, Timestamp]).')">
+  <rect x="460" y="536" width="190" height="36" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.5"/>
+  <text x="555" y="554" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#27500A">FLAG_TS_ORDER</text>
+</g>
+
+<!-- ══ CONNECTIONS ══ -->
+<!-- pos group: danger #E24B4A -->
+<!-- MMSI → POSITION_INVALID (via identification) -->
+<line x1="150" y1="62" x2="458" y2="62" stroke="#E24B4A" stroke-width="1.5" marker-end="url(#ar)" data-group="pos"/>
+<!-- LAT/LON → POSITION_INVALID -->
+<line x1="150" y1="122" x2="458" y2="90" stroke="#E24B4A" stroke-width="2" marker-end="url(#ar)" data-group="pos"/>
+<!-- LAT/LON → ON_LAND -->
+<line x1="150" y1="126" x2="458" y2="114" stroke="#E24B4A" stroke-width="1.5" marker-end="url(#ar)" data-group="pos"/>
+
+<!-- spd group: amber #BA7517 -->
+<!-- LAT/LON + Timestamp → SPEED_JUMP -->
+<path d="M150 128 Q310 148 458 174" fill="none" stroke="#BA7517" stroke-width="1.5" marker-end="url(#ar)" data-group="spd"/>
+<path d="M150 474 Q310 340 458 174" fill="none" stroke="#BA7517" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#ar)" data-group="spd"/>
+<!-- SOG → SPEED_JUMP -->
+<line x1="150" y1="182" x2="458" y2="174" stroke="#BA7517" stroke-width="2" marker-end="url(#ar)" data-group="spd"/>
+<!-- SOG → SOG_CLASS -->
+<line x1="150" y1="186" x2="458" y2="226" stroke="#BA7517" stroke-width="2" marker-end="url(#ar)" data-group="spd"/>
+<!-- Draught → EXCEEDS_HULL -->
+<line x1="150" y1="362" x2="458" y2="278" stroke="#BA7517" stroke-width="2" marker-end="url(#ar)" data-group="spd"/>
+<!-- SOG → EXCEEDS_HULL -->
+<path d="M150 190 Q310 240 458 278" fill="none" stroke="#BA7517" stroke-width="1.5" marker-end="url(#ar)" data-group="spd"/>
+<!-- Ship type → EXCEEDS_HULL -->
+<path d="M150 422 Q340 360 458 278" fill="none" stroke="#BA7517" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#ar)" data-group="spd"/>
+
+<!-- nav group: blue #185FA5 -->
+<!-- LAT/LON + COG + SOG → COG_INCONSISTENT -->
+<path d="M150 130 Q310 260 458 338" fill="none" stroke="#185FA5" stroke-width="1.5" marker-end="url(#ar)" data-group="nav"/>
+<line x1="150" y1="242" x2="458" y2="338" stroke="#185FA5" stroke-width="2" marker-end="url(#ar)" data-group="nav"/>
+<path d="M150 186 Q310 280 458 338" fill="none" stroke="#185FA5" stroke-width="1.5" marker-end="url(#ar)" data-group="nav"/>
+<!-- Heading + COG + SOG → HDG_COG_DIFF -->
+<line x1="150" y1="302" x2="458" y2="390" stroke="#185FA5" stroke-width="2" marker-end="url(#ar)" data-group="nav"/>
+<path d="M150 246 Q310 340 458 390" fill="none" stroke="#185FA5" stroke-width="1.5" marker-end="url(#ar)" data-group="nav"/>
+<path d="M150 192 Q310 320 458 390" fill="none" stroke="#185FA5" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#ar)" data-group="nav"/>
+<!-- Nav status + SOG → STATUS_SOG -->
+<line x1="150" y1="542" x2="458" y2="442" stroke="#185FA5" stroke-width="2" marker-end="url(#ar)" data-group="nav"/>
+<path d="M150 196 Q310 380 458 442" fill="none" stroke="#185FA5" stroke-width="1.5" marker-end="url(#ar)" data-group="nav"/>
+
+<!-- time group: green #3B6D11 -->
+<!-- MMSI + Timestamp → DUPLICATE -->
+<path d="M150 70 Q310 460 458 502" fill="none" stroke="#3B6D11" stroke-width="1.5" marker-end="url(#ar)" data-group="time"/>
+<line x1="150" y1="478" x2="458" y2="502" stroke="#3B6D11" stroke-width="2" marker-end="url(#ar)" data-group="time"/>
+<!-- MMSI + Timestamp → TS_ORDER -->
+<path d="M150 72 Q310 490 458 554" fill="none" stroke="#3B6D11" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#ar)" data-group="time"/>
+<line x1="150" y1="482" x2="458" y2="554" stroke="#3B6D11" stroke-width="2" marker-end="url(#ar)" data-group="time"/>
+
+<!-- field labels inside rects already set, col titles -->
+<text x="95"  y="26" text-anchor="middle" font-size="11" font-weight="500" fill="#888780">pola danych</text>
+<text x="555" y="26" text-anchor="middle" font-size="11" font-weight="500" fill="#888780">wykrywane anomalie</text>
+
+</svg>
+
+<div style="margin: 8px 0 6px; display: flex; gap: 16px; flex-wrap: wrap;">
+  <div class="legend-row"><div class="legend-line" style="background:#E24B4A"></div>pozycja</div>
+  <div class="legend-row"><div class="legend-line" style="background:#BA7517"></div>prędkość</div>
+  <div class="legend-row"><div class="legend-line" style="background:#185FA5"></div>kurs / status</div>
+  <div class="legend-row"><div class="legend-line" style="background:#3B6D11"></div>czas</div>
+  <div class="legend-row"><div class="legend-line" style="background:#888780; height:1px; border-top: 1px dashed #888780"></div>pomocnicza</div>
+</div>
+
+<div class="info-box" id="info-box">Kliknij dowolne pole lub anomalię aby zobaczyć szczegóły.</div>
+
+<script>
+const allGroups = ['pos','spd','nav','time'];
+let active = new Set(['pos','spd','nav','time']);
+
+function showInfo(title, text) {
+  document.getElementById('info-box').innerHTML = '<strong>' + title + '</strong> — ' + text;
+}
+
+function updateLines() {
+  document.querySelectorAll('[data-group]').forEach(el => {
+    el.style.opacity = active.has(el.dataset.group) ? '1' : '0.06';
+  });
+}
+
+function filter(group, btn) {
+  if (active.has(group) && active.size === 1) {
+    active = new Set(allGroups);
+    document.querySelectorAll('.pill').forEach(p => {
+      const g = p.getAttribute('onclick')?.match(/'(\w+)'/)?.[1];
+      if (g) p.className = 'pill active-' + g;
+    });
+  } else if (active.has(group) && active.size === allGroups.length) {
+    active = new Set([group]);
+    document.querySelectorAll('.pill').forEach(p => {
+      const g = p.getAttribute('onclick')?.match(/'(\w+)'/)?.[1];
+      if (g) p.className = 'pill' + (g === group ? ' active-' + g : '');
+    });
+  } else if (active.has(group)) {
+    active.delete(group);
+    btn.className = 'pill';
+  } else {
+    active.add(group);
+    btn.className = 'pill active-' + group;
+  }
+  updateLines();
+}
+
+function filterAll(btn) {
+  active = new Set(allGroups);
+  document.querySelectorAll('.pill').forEach(p => {
+    const g = p.getAttribute('onclick')?.match(/'(\w+)'/)?.[1];
+    if (g) p.className = 'pill active-' + g;
+  });
+  updateLines();
+}
+</script>
